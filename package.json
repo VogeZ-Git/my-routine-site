@@ -1,0 +1,6 @@
+{
+  "name": "my-routine-site",
+  "dependencies": {
+    "@octokit/rest": "^19.0.0"
+  }
+}
