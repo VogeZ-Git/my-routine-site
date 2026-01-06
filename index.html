@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Daily Routine</title>
+    <style>
+        :root { --primary: #2563eb; --bg: #f8fafc; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); display: flex; justify-content: center; padding: 20px; }
+        .card { background: white; padding: 2rem; border-radius: 12px; shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
+        h1 { font-size: 1.5rem; margin-bottom: 0.5rem; color: #1e293b; }
+        .date-display { color: #64748b; margin-bottom: 1.5rem; font-size: 0.9rem; }
+        .task { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1f5f9; cursor: pointer; }
+        .task input { width: 20px; height: 20px; margin-right: 15px; cursor: pointer; }
+        .task span { font-size: 1.1rem; color: #334155; }
+        input:checked + span { text-decoration: line-through; color: #94a3b8; }
+        .status { margin-top: 1rem; font-size: 0.8rem; color: #10b981; min-height: 1.2rem; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h1 id="title">Daily Routine</h1>
+    <div class="date-display" id="dateText"></div>
+    <div id="taskList">Loading your routine...</div>
+    <div class="status" id="saveStatus"></div>
+</div>
+
+<script>
+    // --- CONFIGURATION ---
+    const MASTER_TASKS = ["Wake up 6am", "Drink water", "Exercise", "Read 10 pages", "Journal"];
+    const GITHUB_USERNAME = "Vogez-Git"; // Change this
+    const REPO_NAME = "Repo1"; // The private repo you created
+    
+    const today = new Date().toISOString().split('T')[0];
+    let currentTasks = {};
+
+    document.getElementById('dateText').innerText = new Date().toLocaleDateString('en-US', { 
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+    });
+
+    // 1. Fetch data from GitHub on load
+    async function loadRoutine() {
+        try {
+            const response = await fetch(`https://raw.githubusercontent.com/${Vogez-Git}/${Repo1}/main/days/${today}.json`);
+            
+            if (response.ok) {
+                currentTasks = await response.json();
+            } else {
+                // New day! Initialize with master list
+                MASTER_TASKS.forEach(task => currentTasks[task] = false);
+            }
+            renderTasks();
+        } catch (err) {
+            console.error("Error loading:", err);
+            // Fallback to master list if fetch fails
+            MASTER_TASKS.forEach(task => currentTasks[task] = false);
+            renderTasks();
+        }
+    }
+
+    // 2. Display tasks on screen
+    function renderTasks() {
+        const container = document.getElementById('taskList');
+        container.innerHTML = '';
+        
+        for (const [task, isChecked] of Object.entries(currentTasks)) {
+            const div = document.createElement('label');
+            div.className = 'task';
+            div.innerHTML = `
+                <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleTask('${task.replace(/'/g, "\\'")}', this.checked)">
+                <span>${task}</span>
+            `;
+            container.appendChild(div);
+        }
+    }
+
+    // 3. Save to GitHub via Netlify Function
+    async function toggleTask(taskName, isChecked) {
+        currentTasks[taskName] = isChecked;
+        document.getElementById('saveStatus').innerText = "Saving...";
+
+        try {
+            const response = await fetch('/api/save', {
+                method: 'POST',
+                body: JSON.stringify({
+                    date: today,
+                    tasks: currentTasks
+                })
+            });
+
+            if (response.ok) {
+                document.getElementById('saveStatus').innerText = "Changes saved to GitHub";
+                setTimeout(() => document.getElementById('saveStatus').innerText = "", 2000);
+            }
+        } catch (err) {
+            document.getElementById('saveStatus').innerText = "Error saving!";
+        }
+    }
+
+    loadRoutine();
+</script>
+
+</body>
+</html>
