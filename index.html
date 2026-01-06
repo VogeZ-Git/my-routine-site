@@ -5,18 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Routine Hub</title>
     <style>
-        :root { --primary: #2563eb; --bg: #f8fafc; --weekly: #7c3aed; --monthly: #db2777; }
-        body { font-family: system-ui, sans-serif; background: var(--bg); padding: 20px; display: flex; justify-content: center; }
+        :root { --daily: #2563eb; --weekly: #7c3aed; --monthly: #db2777; --bg: #f8fafc; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); padding: 20px; display: flex; justify-content: center; margin: 0; padding-bottom: 100px; }
         .container { width: 100%; max-width: 500px; }
         .card { background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 1.5rem; }
-        h2 { font-size: 1.2rem; margin-top: 0; display: flex; justify-content: space-between; }
+        
+        h2 { font-size: 1.2rem; margin: 0 0 1rem 0; display: flex; justify-content: space-between; align-items: center; }
         .date-label { font-size: 0.8rem; color: #64748b; font-weight: normal; }
-        .task { display: flex; align-items: center; padding: 10px 0; border-bottom: 1px solid #f1f5f9; cursor: pointer; }
-        .task input { width: 18px; height: 18px; margin-right: 12px; }
+        
+        .task { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1f5f9; cursor: pointer; transition: background 0.2s; }
+        .task:last-child { border-bottom: none; }
+        .task input { width: 20px; height: 20px; margin-right: 12px; cursor: pointer; }
+        .task span { font-size: 1rem; color: #334155; }
         input:checked + span { text-decoration: line-through; color: #94a3b8; }
-        .status-bar { position: fixed; bottom: 20px; right: 20px; background: #1e293b; color: white; padding: 8px 16px; border-radius: 20px; font-size: 0.8rem; display: none; }
-        .daily h2 { color: var(--primary); }
-        .weekly h2 { color: var(--weekly); }
+
+        /* Save Button Area */
+        .controls { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 20px; border-top: 1px solid #e2e8f0; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .save-btn { background: #1e293b; color: white; border: none; padding: 14px 40px; border-radius: 30px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-size: 1rem; transition: all 0.3s; }
+        .save-btn:hover { background: #334155; transform: translateY(-2px); }
+        .save-btn:disabled { background: #94a3b8; cursor: not-allowed; transform: none; }
+        
+        #unsavedText { color: #ef4444; font-size: 0.85rem; font-weight: 600; visibility: hidden; }
+        
+        .daily h2 { color: var(--daily); } 
+        .weekly h2 { color: var(--weekly); } 
         .monthly h2 { color: var(--monthly); }
     </style>
 </head>
@@ -24,26 +36,30 @@
 
 <div class="container">
     <div class="card daily">
-        <h2>Daily <span class="date-label" id="dailyDate"></span></h2>
-        <div id="dailyList">Loading...</div>
+        <h2>Daily <span class="date-label" id="dDate"></span></h2>
+        <div id="dailyList">Loading tasks...</div>
     </div>
 
     <div class="card weekly">
-        <h2>Weekly <span class="date-label" id="weeklyDate"></span></h2>
-        <div id="weeklyList">Loading...</div>
+        <h2>Weekly <span class="date-label" id="wDate"></span></h2>
+        <div id="weeklyList">Loading tasks...</div>
     </div>
 
     <div class="card monthly">
-        <h2>Monthly <span class="date-label" id="monthlyDate"></span></h2>
-        <div id="monthlyList">Loading...</div>
+        <h2>Monthly <span class="date-label" id="mDate"></span></h2>
+        <div id="monthlyList">Loading tasks...</div>
     </div>
 </div>
 
-<div class="status-bar" id="saveStatus">Saving to GitHub...</div>
+<div class="controls">
+    <div id="unsavedText">⚠️ Progress not saved</div>
+    <button class="save-btn" id="saveBtn" onclick="saveAll()">Save Changes</button>
+</div>
 
 <script>
+    // --- CONFIGURATION ---
     const CONFIG = {
-        username: "Vogez-Git",
+        username: "Vogez-Git", // MUST MATCH YOUR GITHUB
         repo: "Repo1",
         tasks: {
             daily: ["Wake up 6am", "Drink water", "Exercise", "Journal"],
@@ -52,104 +68,133 @@
         }
     };
 
-    const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
+    const todayStr = new Date().toISOString().split('T')[0];
     let state = { daily: {}, weekly: {}, monthly: {} };
+    let isDirty = false;
 
-    // Helper: Get ISO Week number
-    function getWeek(date) {
-        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-        d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
-        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-        return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    // Helper: ISO Week calculation
+    function getWeek(d) {
+        const date = new Date(d);
+        date.setHours(0,0,0,0);
+        date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+        return Math.ceil((((date - new Date(date.getFullYear(),0,4))/86400000)+1)/7);
     }
 
     async function init() {
-        document.getElementById('dailyDate').innerText = todayStr;
-        document.getElementById('weeklyDate').innerText = "Week " + getWeek(now);
-        document.getElementById('monthlyDate').innerText = now.toLocaleString('default', { month: 'long' });
-
-        await loadSmartData();
-        renderAll();
+        document.getElementById('dDate').innerText = todayStr;
+        document.getElementById('wDate').innerText = "Week " + getWeek(new Date());
+        document.getElementById('mDate').innerText = new Date().toLocaleString('default', {month:'long'});
+        
+        await loadData();
+        render();
     }
 
-    async function loadSmartData() {
-        // 1. Try to get today's data first
+    async function loadData() {
         let data = await fetchFile(todayStr);
-
+        
         if (!data) {
-            // 2. If today is empty, find the most recent previous entry (check last 30 days)
+            // Check last 30 days for a previous record to carry over weekly/monthly
             for (let i = 1; i <= 30; i++) {
-                let prevDate = new Date();
-                prevDate.setDate(now.getDate() - i);
-                const prevStr = prevDate.toISOString().split('T')[0];
-                const prevData = await fetchFile(prevStr);
-
+                let prev = new Date(); 
+                prev.setDate(prev.getDate() - i);
+                let prevStr = prev.toISOString().split('T')[0];
+                let prevData = await fetchFile(prevStr);
+                
                 if (prevData) {
                     data = prevData;
-                    const lastDate = new Date(prevStr);
-
-                    // RESET LOGIC
-                    // If last save was a different week, reset weekly
-                    if (getWeek(lastDate) !== getWeek(now) || lastDate.getFullYear() !== now.getFullYear()) {
-                        Object.keys(data.weekly).forEach(k => data.weekly[k] = false);
-                    }
-                    // If last save was a different month, reset monthly
-                    if (lastDate.getMonth() !== now.getMonth() || lastDate.getFullYear() !== now.getFullYear()) {
-                        Object.keys(data.monthly).forEach(k => data.monthly[k] = false);
-                    }
-                    // Daily always resets
+                    const lastD = new Date(prevStr);
+                    const nowD = new Date();
+                    
+                    // Reset Logic
+                    if (getWeek(lastD) !== getWeek(nowD)) Object.keys(data.weekly).forEach(k => data.weekly[k] = false);
+                    if (lastD.getMonth() !== nowD.getMonth()) Object.keys(data.monthly).forEach(k => data.monthly[k] = false);
                     Object.keys(data.daily).forEach(k => data.daily[k] = false);
                     break;
                 }
             }
         }
 
-        // 3. Fallback if no history exists at all
-        if (!data) {
-            data = { daily: {}, weekly: {}, monthly: {} };
-            CONFIG.tasks.daily.forEach(t => data.daily[t] = false);
-            CONFIG.tasks.weekly.forEach(t => data.weekly[t] = false);
-            CONFIG.tasks.monthly.forEach(t => data.monthly[t] = false);
-        }
+        // Initialize from CONFIG if no history or missing tasks
+        if (!data) data = { daily: {}, weekly: {}, monthly: {} };
+        Object.keys(CONFIG.tasks).forEach(cat => {
+            if (!data[cat]) data[cat] = {};
+            CONFIG.tasks[cat].forEach(t => {
+                if (!(t in data[cat])) data[cat][t] = false;
+            });
+        });
 
         state = data;
     }
 
     async function fetchFile(date) {
         try {
-            const res = await fetch(`https://raw.githubusercontent.com/${CONFIG.username}/${CONFIG.repo}/main/days/${date}.json?nocache=${Math.random()}`);
-            return res.ok ? await res.json() : null;
-        } catch (e) { return null; }
+            const r = await fetch(`https://raw.githubusercontent.com/${CONFIG.username}/${CONFIG.repo}/main/days/${date}.json?cb=${Date.now()}`);
+            return r.ok ? await r.json() : null;
+        } catch(e) { return null; }
     }
 
-    // ... Keep renderSection and update functions from previous version ...
-    function renderAll() {
-        renderSection('dailyList', state.daily, 'daily');
-        renderSection('weeklyList', state.weekly, 'weekly');
-        renderSection('monthlyList', state.monthly, 'monthly');
-    }
-
-    function renderSection(id, data, type) {
-        const cont = document.getElementById(id);
-        cont.innerHTML = '';
-        Object.entries(data).forEach(([task, done]) => {
-            const el = document.createElement('label');
-            el.className = 'task';
-            el.innerHTML = `<input type="checkbox" ${done ? 'checked' : ''} onchange="update('${type}', '${task}', this.checked)"><span>${task}</span>`;
-            cont.appendChild(el);
+    function render() {
+        ['daily','weekly','monthly'].forEach(cat => {
+            const el = document.getElementById(cat+'List');
+            el.innerHTML = '';
+            Object.entries(state[cat]).forEach(([task, done]) => {
+                const label = document.createElement('label');
+                label.className = 'task';
+                label.innerHTML = `
+                    <input type="checkbox" ${done?'checked':''} 
+                           onchange="trackChange('${cat}','${task.replace(/'/g, "\\'")}',this.checked)">
+                    <span>${task}</span>
+                `;
+                el.appendChild(label);
+            });
         });
     }
 
-    async function update(type, task, val) {
-        state[type][task] = val;
-        document.getElementById('saveStatus').style.display = 'block';
-        await fetch('/api/save', {
-            method: 'POST',
-            body: JSON.stringify({ date: todayStr, tasks: state })
-        });
-        setTimeout(() => document.getElementById('saveStatus').style.display = 'none', 1000);
+    function trackChange(cat, task, val) {
+        state[cat][task] = val;
+        isDirty = true;
+        document.getElementById('unsavedText').style.visibility = 'visible';
+        document.getElementById('saveBtn').style.background = '#2563eb';
     }
+
+    async function saveAll() {
+        const btn = document.getElementById('saveBtn');
+        const warning = document.getElementById('unsavedText');
+        
+        btn.disabled = true;
+        btn.innerText = "Saving to GitHub...";
+
+        try {
+            const response = await fetch('/api/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tasks: state })
+            });
+
+            if (response.ok) {
+                isDirty = false;
+                warning.style.visibility = 'hidden';
+                btn.innerText = "Saved Successfully!";
+                btn.style.background = '#10b981';
+                setTimeout(() => {
+                    btn.innerText = "Save Changes";
+                    btn.style.background = '#1e293b';
+                    btn.disabled = false;
+                }, 2000);
+            } else {
+                throw new Error();
+            }
+        } catch (err) {
+            alert("Error saving! Make sure Netlify GITHUB_TOKEN is set.");
+            btn.disabled = false;
+            btn.innerText = "Try Again";
+        }
+    }
+
+    // Alert user if they try to leave with unsaved changes
+    window.onbeforeunload = function() {
+        if (isDirty) return "You have unsaved changes!";
+    };
 
     init();
 </script>
