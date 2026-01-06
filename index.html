@@ -3,103 +3,155 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Daily Routine</title>
+    <title>My Routine Hub</title>
     <style>
-        :root { --primary: #2563eb; --bg: #f8fafc; }
-        body { font-family: system-ui, sans-serif; background: var(--bg); display: flex; justify-content: center; padding: 20px; }
-        .card { background: white; padding: 2rem; border-radius: 12px; shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
-        h1 { font-size: 1.5rem; margin-bottom: 0.5rem; color: #1e293b; }
-        .date-display { color: #64748b; margin-bottom: 1.5rem; font-size: 0.9rem; }
-        .task { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1f5f9; cursor: pointer; }
-        .task input { width: 20px; height: 20px; margin-right: 15px; cursor: pointer; }
-        .task span { font-size: 1.1rem; color: #334155; }
+        :root { --primary: #2563eb; --bg: #f8fafc; --weekly: #7c3aed; --monthly: #db2777; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); padding: 20px; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 500px; }
+        .card { background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 1.5rem; }
+        h2 { font-size: 1.2rem; margin-top: 0; display: flex; justify-content: space-between; }
+        .date-label { font-size: 0.8rem; color: #64748b; font-weight: normal; }
+        .task { display: flex; align-items: center; padding: 10px 0; border-bottom: 1px solid #f1f5f9; cursor: pointer; }
+        .task input { width: 18px; height: 18px; margin-right: 12px; }
         input:checked + span { text-decoration: line-through; color: #94a3b8; }
-        .status { margin-top: 1rem; font-size: 0.8rem; color: #10b981; min-height: 1.2rem; }
+        .status-bar { position: fixed; bottom: 20px; right: 20px; background: #1e293b; color: white; padding: 8px 16px; border-radius: 20px; font-size: 0.8rem; display: none; }
+        .daily h2 { color: var(--primary); }
+        .weekly h2 { color: var(--weekly); }
+        .monthly h2 { color: var(--monthly); }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <h1 id="title">Daily Routine</h1>
-    <div class="date-display" id="dateText"></div>
-    <div id="taskList">Loading your routine...</div>
-    <div class="status" id="saveStatus"></div>
+<div class="container">
+    <div class="card daily">
+        <h2>Daily <span class="date-label" id="dailyDate"></span></h2>
+        <div id="dailyList">Loading...</div>
+    </div>
+
+    <div class="card weekly">
+        <h2>Weekly <span class="date-label" id="weeklyDate"></span></h2>
+        <div id="weeklyList">Loading...</div>
+    </div>
+
+    <div class="card monthly">
+        <h2>Monthly <span class="date-label" id="monthlyDate"></span></h2>
+        <div id="monthlyList">Loading...</div>
+    </div>
 </div>
 
+<div class="status-bar" id="saveStatus">Saving to GitHub...</div>
+
 <script>
-    // --- CONFIGURATION ---
-    const MASTER_TASKS = ["Wake up 6am", "Drink water", "Exercise", "Read 10 pages", "Journal"];
-    const GITHUB_USERNAME = "Vogez-Git"; // Change this
-    const REPO_NAME = "Repo1"; // The private repo you created
-    
-    const today = new Date().toISOString().split('T')[0];
-    let currentTasks = {};
+    const CONFIG = {
+        username: "Vogez-Git",
+        repo: "Repo1",
+        tasks: {
+            daily: ["Wake up 6am", "Drink water", "Exercise", "Journal"],
+            weekly: ["Review Finances", "Clean House", "Meal Prep"],
+            monthly: ["Pay Rent", "Deep Clean Fridge", "Review Goals"]
+        }
+    };
 
-    document.getElementById('dateText').innerText = new Date().toLocaleDateString('en-US', { 
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
-    });
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    let state = { daily: {}, weekly: {}, monthly: {} };
 
-    // 1. Fetch data from GitHub on load
-    async function loadRoutine() {
-        try {
-            const response = await fetch(`https://raw.githubusercontent.com/${Vogez-Git}/${Repo1}/main/days/${today}.json`);
-            
-            if (response.ok) {
-                currentTasks = await response.json();
-            } else {
-                // New day! Initialize with master list
-                MASTER_TASKS.forEach(task => currentTasks[task] = false);
+    // Helper: Get ISO Week number
+    function getWeek(date) {
+        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    }
+
+    async function init() {
+        document.getElementById('dailyDate').innerText = todayStr;
+        document.getElementById('weeklyDate').innerText = "Week " + getWeek(now);
+        document.getElementById('monthlyDate').innerText = now.toLocaleString('default', { month: 'long' });
+
+        await loadSmartData();
+        renderAll();
+    }
+
+    async function loadSmartData() {
+        // 1. Try to get today's data first
+        let data = await fetchFile(todayStr);
+
+        if (!data) {
+            // 2. If today is empty, find the most recent previous entry (check last 30 days)
+            for (let i = 1; i <= 30; i++) {
+                let prevDate = new Date();
+                prevDate.setDate(now.getDate() - i);
+                const prevStr = prevDate.toISOString().split('T')[0];
+                const prevData = await fetchFile(prevStr);
+
+                if (prevData) {
+                    data = prevData;
+                    const lastDate = new Date(prevStr);
+
+                    // RESET LOGIC
+                    // If last save was a different week, reset weekly
+                    if (getWeek(lastDate) !== getWeek(now) || lastDate.getFullYear() !== now.getFullYear()) {
+                        Object.keys(data.weekly).forEach(k => data.weekly[k] = false);
+                    }
+                    // If last save was a different month, reset monthly
+                    if (lastDate.getMonth() !== now.getMonth() || lastDate.getFullYear() !== now.getFullYear()) {
+                        Object.keys(data.monthly).forEach(k => data.monthly[k] = false);
+                    }
+                    // Daily always resets
+                    Object.keys(data.daily).forEach(k => data.daily[k] = false);
+                    break;
+                }
             }
-            renderTasks();
-        } catch (err) {
-            console.error("Error loading:", err);
-            // Fallback to master list if fetch fails
-            MASTER_TASKS.forEach(task => currentTasks[task] = false);
-            renderTasks();
         }
+
+        // 3. Fallback if no history exists at all
+        if (!data) {
+            data = { daily: {}, weekly: {}, monthly: {} };
+            CONFIG.tasks.daily.forEach(t => data.daily[t] = false);
+            CONFIG.tasks.weekly.forEach(t => data.weekly[t] = false);
+            CONFIG.tasks.monthly.forEach(t => data.monthly[t] = false);
+        }
+
+        state = data;
     }
 
-    // 2. Display tasks on screen
-    function renderTasks() {
-        const container = document.getElementById('taskList');
-        container.innerHTML = '';
-        
-        for (const [task, isChecked] of Object.entries(currentTasks)) {
-            const div = document.createElement('label');
-            div.className = 'task';
-            div.innerHTML = `
-                <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleTask('${task.replace(/'/g, "\\'")}', this.checked)">
-                <span>${task}</span>
-            `;
-            container.appendChild(div);
-        }
-    }
-
-    // 3. Save to GitHub via Netlify Function
-    async function toggleTask(taskName, isChecked) {
-        currentTasks[taskName] = isChecked;
-        document.getElementById('saveStatus').innerText = "Saving...";
-
+    async function fetchFile(date) {
         try {
-            const response = await fetch('/api/save', {
-                method: 'POST',
-                body: JSON.stringify({
-                    date: today,
-                    tasks: currentTasks
-                })
-            });
-
-            if (response.ok) {
-                document.getElementById('saveStatus').innerText = "Changes saved to GitHub";
-                setTimeout(() => document.getElementById('saveStatus').innerText = "", 2000);
-            }
-        } catch (err) {
-            document.getElementById('saveStatus').innerText = "Error saving!";
-        }
+            const res = await fetch(`https://raw.githubusercontent.com/${CONFIG.username}/${CONFIG.repo}/main/days/${date}.json?nocache=${Math.random()}`);
+            return res.ok ? await res.json() : null;
+        } catch (e) { return null; }
     }
 
-    loadRoutine();
+    // ... Keep renderSection and update functions from previous version ...
+    function renderAll() {
+        renderSection('dailyList', state.daily, 'daily');
+        renderSection('weeklyList', state.weekly, 'weekly');
+        renderSection('monthlyList', state.monthly, 'monthly');
+    }
+
+    function renderSection(id, data, type) {
+        const cont = document.getElementById(id);
+        cont.innerHTML = '';
+        Object.entries(data).forEach(([task, done]) => {
+            const el = document.createElement('label');
+            el.className = 'task';
+            el.innerHTML = `<input type="checkbox" ${done ? 'checked' : ''} onchange="update('${type}', '${task}', this.checked)"><span>${task}</span>`;
+            cont.appendChild(el);
+        });
+    }
+
+    async function update(type, task, val) {
+        state[type][task] = val;
+        document.getElementById('saveStatus').style.display = 'block';
+        await fetch('/api/save', {
+            method: 'POST',
+            body: JSON.stringify({ date: todayStr, tasks: state })
+        });
+        setTimeout(() => document.getElementById('saveStatus').style.display = 'none', 1000);
+    }
+
+    init();
 </script>
-
 </body>
 </html>
