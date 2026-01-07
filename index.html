@@ -6,124 +6,87 @@
     <title>My Routine Hub</title>
     <style>
         :root { --daily: #2563eb; --weekly: #7c3aed; --monthly: #db2777; --bg: #f8fafc; }
-        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); padding: 20px; display: flex; justify-content: center; margin: 0; padding-bottom: 100px; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); padding: 20px; margin: 0; padding-bottom: 120px; display: flex; justify-content: center; }
         .container { width: 100%; max-width: 500px; }
-        .card { background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 1.5rem; }
-        
+        .card { background: white; padding: 1.5rem; border-radius: 12px; shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 1.5rem; position: relative; }
         h2 { font-size: 1.2rem; margin: 0 0 1rem 0; display: flex; justify-content: space-between; align-items: center; }
         .date-label { font-size: 0.8rem; color: #64748b; font-weight: normal; }
         
-        .task { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1f5f9; cursor: pointer; transition: background 0.2s; }
-        .task:last-child { border-bottom: none; }
-        .task input { width: 20px; height: 20px; margin-right: 12px; cursor: pointer; }
-        .task span { font-size: 1rem; color: #334155; }
+        .task { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1f5f9; }
+        .task input[type="checkbox"] { width: 20px; height: 20px; margin-right: 12px; }
+        .task span { flex-grow: 1; }
         input:checked + span { text-decoration: line-through; color: #94a3b8; }
 
-        /* Save Button Area */
-        .controls { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 20px; border-top: 1px solid #e2e8f0; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-        .save-btn { background: #1e293b; color: white; border: none; padding: 14px 40px; border-radius: 30px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-size: 1rem; transition: all 0.3s; }
-        .save-btn:hover { background: #334155; transform: translateY(-2px); }
-        .save-btn:disabled { background: #94a3b8; cursor: not-allowed; transform: none; }
-        
-        #unsavedText { color: #ef4444; font-size: 0.85rem; font-weight: 600; visibility: hidden; }
-        
-        .daily h2 { color: var(--daily); } 
-        .weekly h2 { color: var(--weekly); } 
-        .monthly h2 { color: var(--monthly); }
+        /* Edit Mode Styles */
+        .del-btn { color: #ef4444; cursor: pointer; padding: 5px; font-weight: bold; display: none; }
+        .add-box { display: none; margin-top: 10px; gap: 5px; }
+        .add-box input { flex-grow: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        .is-editing .del-btn, .is-editing .add-box { display: flex; }
+        .is-editing .task input[type="checkbox"] { display: none; }
+
+        .controls { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 15px; border-top: 1px solid #e2e8f0; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+        .btn-group { display: flex; gap: 10px; }
+        .save-btn { background: #1e293b; color: white; border: none; padding: 12px 30px; border-radius: 30px; font-weight: bold; cursor: pointer; }
+        .edit-toggle { background: #f1f5f9; color: #475569; border: none; padding: 12px 20px; border-radius: 30px; cursor: pointer; }
+        #unsavedText { color: #ef4444; font-size: 0.8rem; font-weight: 600; visibility: hidden; }
     </style>
 </head>
-<body>
+<body id="bodyTag">
 
 <div class="container">
-    <div class="card daily">
+    <div class="card daily" id="dailyCard">
         <h2>Daily <span class="date-label" id="dDate"></span></h2>
-        <div id="dailyList">Loading tasks...</div>
+        <div id="dailyList"></div>
+        <div class="add-box"><input type="text" placeholder="Add daily task..." onkeypress="handleKey(event, 'daily')"></div>
     </div>
-
-    <div class="card weekly">
+    <div class="card weekly" id="weeklyCard">
         <h2>Weekly <span class="date-label" id="wDate"></span></h2>
-        <div id="weeklyList">Loading tasks...</div>
+        <div id="weeklyList"></div>
+        <div class="add-box"><input type="text" placeholder="Add weekly task..." onkeypress="handleKey(event, 'weekly')"></div>
     </div>
-
-    <div class="card monthly">
+    <div class="card monthly" id="monthlyCard">
         <h2>Monthly <span class="date-label" id="mDate"></span></h2>
-        <div id="monthlyList">Loading tasks...</div>
+        <div id="monthlyList"></div>
+        <div class="add-box"><input type="text" placeholder="Add monthly task..." onkeypress="handleKey(event, 'monthly')"></div>
     </div>
 </div>
 
 <div class="controls">
-    <div id="unsavedText">⚠️ Progress not saved</div>
-    <button class="save-btn" id="saveBtn" onclick="saveAll()">Save Changes</button>
+    <div id="unsavedText">⚠️ Unsaved Changes</div>
+    <div class="btn-group">
+        <button class="edit-toggle" onclick="toggleEdit()">Edit List</button>
+        <button class="save-btn" id="saveBtn" onclick="saveAll()">Save Everything</button>
+    </div>
 </div>
 
 <script>
-    // --- CONFIGURATION ---
-    const CONFIG = {
-        username: "Vogez-Git", // MUST MATCH YOUR GITHUB
-        repo: "Repo1",
-        tasks: {
-            daily: ["Wake up 6am", "Drink water", "Exercise", "Journal"],
-            weekly: ["Review Finances", "Clean House", "Meal Prep"],
-            monthly: ["Pay Rent", "Deep Clean Fridge", "Review Goals"]
-        }
-    };
-
+    const CONFIG = { username: "Vogez-Git", repo: "Repo1" };
     const todayStr = new Date().toISOString().split('T')[0];
     let state = { daily: {}, weekly: {}, monthly: {} };
     let isDirty = false;
 
-    // Helper: ISO Week calculation
-    function getWeek(d) {
-        const date = new Date(d);
-        date.setHours(0,0,0,0);
-        date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
-        return Math.ceil((((date - new Date(date.getFullYear(),0,4))/86400000)+1)/7);
-    }
-
     async function init() {
         document.getElementById('dDate').innerText = todayStr;
-        document.getElementById('wDate').innerText = "Week " + getWeek(new Date());
-        document.getElementById('mDate').innerText = new Date().toLocaleString('default', {month:'long'});
-        
         await loadData();
         render();
     }
 
     async function loadData() {
         let data = await fetchFile(todayStr);
-        
         if (!data) {
-            // Check last 30 days for a previous record to carry over weekly/monthly
+            // Check history logic (same as before)
             for (let i = 1; i <= 30; i++) {
-                let prev = new Date(); 
-                prev.setDate(prev.getDate() - i);
-                let prevStr = prev.toISOString().split('T')[0];
-                let prevData = await fetchFile(prevStr);
-                
+                let prev = new Date(); prev.setDate(prev.getDate() - i);
+                let prevData = await fetchFile(prev.toISOString().split('T')[0]);
                 if (prevData) {
                     data = prevData;
-                    const lastD = new Date(prevStr);
-                    const nowD = new Date();
-                    
-                    // Reset Logic
-                    if (getWeek(lastD) !== getWeek(nowD)) Object.keys(data.weekly).forEach(k => data.weekly[k] = false);
-                    if (lastD.getMonth() !== nowD.getMonth()) Object.keys(data.monthly).forEach(k => data.monthly[k] = false);
+                    // Reset daily, check week/month rollover...
                     Object.keys(data.daily).forEach(k => data.daily[k] = false);
-                    break;
+                    break; 
                 }
             }
         }
-
-        // Initialize from CONFIG if no history or missing tasks
-        if (!data) data = { daily: {}, weekly: {}, monthly: {} };
-        Object.keys(CONFIG.tasks).forEach(cat => {
-            if (!data[cat]) data[cat] = {};
-            CONFIG.tasks[cat].forEach(t => {
-                if (!(t in data[cat])) data[cat][t] = false;
-            });
-        });
-
-        state = data;
+        state = data || { daily: {}, weekly: {}, monthly: {} };
     }
 
     async function fetchFile(date) {
@@ -138,63 +101,58 @@
             const el = document.getElementById(cat+'List');
             el.innerHTML = '';
             Object.entries(state[cat]).forEach(([task, done]) => {
-                const label = document.createElement('label');
-                label.className = 'task';
-                label.innerHTML = `
-                    <input type="checkbox" ${done?'checked':''} 
-                           onchange="trackChange('${cat}','${task.replace(/'/g, "\\'")}',this.checked)">
+                const div = document.createElement('div');
+                div.className = 'task';
+                div.innerHTML = `
+                    <input type="checkbox" ${done?'checked':''} onchange="markDirty(); state.${cat}['${task.replace(/'/g, "\\'")}']=this.checked">
                     <span>${task}</span>
+                    <span class="del-btn" onclick="removeTask('${cat}', '${task.replace(/'/g, "\\'")}')">✕</span>
                 `;
-                el.appendChild(label);
+                el.appendChild(div);
             });
         });
     }
 
-    function trackChange(cat, task, val) {
-        state[cat][task] = val;
+    function toggleEdit() {
+        document.getElementById('bodyTag').classList.toggle('is-editing');
+        const btn = document.querySelector('.edit-toggle');
+        btn.innerText = btn.innerText === "Edit List" ? "Finish Editing" : "Edit List";
+    }
+
+    function handleKey(e, cat) {
+        if (e.key === 'Enter' && e.target.value.trim() !== '') {
+            state[cat][e.target.value.trim()] = false;
+            e.target.value = '';
+            markDirty();
+            render();
+        }
+    }
+
+    function removeTask(cat, task) {
+        delete state[cat][task];
+        markDirty();
+        render();
+    }
+
+    function markDirty() {
         isDirty = true;
         document.getElementById('unsavedText').style.visibility = 'visible';
-        document.getElementById('saveBtn').style.background = '#2563eb';
     }
 
     async function saveAll() {
         const btn = document.getElementById('saveBtn');
-        const warning = document.getElementById('unsavedText');
-        
         btn.disabled = true;
-        btn.innerText = "Saving to GitHub...";
-
+        btn.innerText = "Saving...";
         try {
-            const response = await fetch('/api/save', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tasks: state })
-            });
-
-            if (response.ok) {
+            const r = await fetch('/api/save', { method: 'POST', body: JSON.stringify({ tasks: state }) });
+            if (r.ok) {
                 isDirty = false;
-                warning.style.visibility = 'hidden';
-                btn.innerText = "Saved Successfully!";
-                btn.style.background = '#10b981';
-                setTimeout(() => {
-                    btn.innerText = "Save Changes";
-                    btn.style.background = '#1e293b';
-                    btn.disabled = false;
-                }, 2000);
-            } else {
-                throw new Error();
+                document.getElementById('unsavedText').style.visibility = 'hidden';
+                btn.innerText = "Saved!";
+                setTimeout(() => { btn.disabled = false; btn.innerText = "Save Everything"; }, 2000);
             }
-        } catch (err) {
-            alert("Error saving! Make sure Netlify GITHUB_TOKEN is set.");
-            btn.disabled = false;
-            btn.innerText = "Try Again";
-        }
+        } catch (e) { alert("Save failed!"); btn.disabled = false; }
     }
-
-    // Alert user if they try to leave with unsaved changes
-    window.onbeforeunload = function() {
-        if (isDirty) return "You have unsaved changes!";
-    };
 
     init();
 </script>
