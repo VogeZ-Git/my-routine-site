@@ -75,14 +75,36 @@
     async function loadData() {
         let data = await fetchFile(todayStr);
         if (!data) {
-            // Check history logic (same as before)
+            // Check history logic
             for (let i = 1; i <= 30; i++) {
                 let prev = new Date(); prev.setDate(prev.getDate() - i);
-                let prevData = await fetchFile(prev.toISOString().split('T')[0]);
+                let prevStr = prev.toISOString().split('T')[0];
+                let prevData = await fetchFile(prevStr);
                 if (prevData) {
                     data = prevData;
-                    // Reset daily, check week/month rollover...
+                    const now = new Date();
+                    
+                    // Always reset daily
                     Object.keys(data.daily).forEach(k => data.daily[k] = false);
+                    
+                    // Reset weekly if we're in a different week
+                    const prevWeek = getWeekNumber(prev);
+                    const currentWeek = getWeekNumber(now);
+                    const prevYear = prev.getFullYear();
+                    const currentYear = now.getFullYear();
+                    if (prevYear !== currentYear || prevWeek !== currentWeek) {
+                        Object.keys(data.weekly).forEach(k => data.weekly[k] = false);
+                    }
+                    
+                    // Reset monthly if we're in a new month
+                    const prevMonth = prev.getMonth();
+                    const currentMonth = now.getMonth();
+                    const prevMonthYear = prev.getFullYear();
+                    const currentMonthYear = now.getFullYear();
+                    if (prevMonthYear !== currentMonthYear || prevMonth !== currentMonth) {
+                        Object.keys(data.monthly).forEach(k => data.monthly[k] = false);
+                    }
+                    
                     break; 
                 }
             }
@@ -96,6 +118,8 @@
             return r.ok ? await r.json() : null;
         } catch(e) { return null; }
     }
+
+    
 
     function render() {
         ['daily','weekly','monthly'].forEach(cat => {
@@ -140,6 +164,14 @@
         document.getElementById('unsavedText').style.visibility = 'visible';
     }
 
+     function getWeekNumber(date) {
+        const d = new Date(date);
+        d.setHours(0, 0, 0, 0);
+        d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+        const yearStart = new Date(d.getFullYear(), 0, 1);
+        return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    }
+    
     async function saveAll() {
         const btn = document.getElementById('saveBtn');
         btn.disabled = true;
@@ -160,3 +192,4 @@
 </body>
 
 </html>
+
