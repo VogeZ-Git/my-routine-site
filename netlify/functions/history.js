@@ -2,8 +2,8 @@ const { Octokit } = require("@octokit/rest");
 
 exports.handler = async (event) => {
   const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
-  const owner = 'YOUR_GITHUB_USERNAME'; // CHANGE THIS
-  const repo = 'my-routine-data';
+  const owner = 'VogeZ-Git'; // CHANGE THIS
+  const repo = 'Repo1';
 
   try {
     // 1. Get list of all files in /days folder
