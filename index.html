@@ -29,6 +29,14 @@
         .btn-group { display: flex; gap: 10px; }
         .save-btn { background: #1e293b; color: white; border: none; padding: 12px 30px; border-radius: 30px; font-weight: bold; cursor: pointer; }
         .edit-toggle { background: #f1f5f9; color: #475569; border: none; padding: 12px 20px; border-radius: 30px; cursor: pointer; }
+        .history-card { margin-top: 2rem; overflow-x: auto; padding-bottom: 10px; }
+        .history-grid { display: grid; gap: 4px; grid-template-columns: auto repeat(auto-fill, 12px); font-size: 10px; }
+        .history-row { display: contents; }
+        .task-name-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px; padding-right: 8px; color: #64748b; }
+        .sq { width: 12px; height: 12px; border-radius: 2px; background: #e2e8f0; }
+        .sq.done { background: #10b981; } /* Green for checked */
+        .history-header { display: contents; }
+        .history-header div { transform: rotate(-90deg); height: 30px; margin-bottom: 5px; }
         #unsavedText { color: #ef4444; font-size: 0.8rem; font-weight: 600; visibility: hidden; }
     </style>
 </head>
@@ -50,6 +58,12 @@
         <div id="monthlyList"></div>
         <div class="add-box"><input type="text" placeholder="Add monthly task..." onkeypress="handleKey(event, 'monthly')"></div>
     </div>
+    <div class="card history-card">
+        <h2 style="color: #64748b;">History <span class="date-label">Last 30 Days</span></h2>
+        <div id="historyGrid" class="history-grid">
+            <p style="color: #94a3b8;">Loading history database...</p>
+        </div>
+    </div>
 </div>
 
 <div class="controls">
@@ -66,11 +80,49 @@
     let state = { daily: {}, weekly: {}, monthly: {} };
     let isDirty = false;
 
-    async function init() {
-        document.getElementById('dDate').innerText = todayStr;
-        await loadData();
-        render();
+    async function loadHistory() {
+    const grid = document.getElementById('historyGrid');
+    try {
+        const response = await fetch('/api/history');
+        const data = await response.json();
+
+        if (!data.tasks.length) {
+            grid.innerHTML = "No history found.";
+            return;
+        }
+
+        // 1. Create Headers (Dates)
+        let html = '<div class="task-name-label"></div>'; // Empty top-left corner
+        data.dates.forEach(d => {
+            const shortDate = d.split('-').slice(1).join('/'); // MM/DD
+            html += `<div style="font-size: 8px; color: #94a3b8;">${shortDate}</div>`;
+        });
+
+        // 2. Create Rows (Tasks)
+        data.tasks.forEach(taskName => {
+            html += `<div class="history-row">`;
+            html += `<div class="task-name-label">${taskName}</div>`;
+            
+            data.dates.forEach(date => {
+                const isDone = data.history[date] && data.history[date][taskName];
+                html += `<div class="sq ${isDone ? 'done' : ''}" title="${date}: ${taskName}"></div>`;
+            });
+            html += `</div>`;
+        });
+
+        grid.innerHTML = html;
+    } catch (err) {
+        grid.innerHTML = "Error loading history.";
     }
+}
+
+// Update your init() to include history
+async function init() {
+    document.getElementById('dDate').innerText = todayStr;
+    await loadData();
+    render();
+    loadHistory(); // <-- ADD THIS
+}
 
     async function loadData() {
         let data = await fetchFile(todayStr);
@@ -192,4 +244,5 @@
 </body>
 
 </html>
+
 
