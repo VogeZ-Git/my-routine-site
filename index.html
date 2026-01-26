@@ -29,12 +29,49 @@
         .btn-group { display: flex; gap: 10px; }
         .save-btn { background: #1e293b; color: white; border: none; padding: 12px 30px; border-radius: 30px; font-weight: bold; cursor: pointer; }
         .edit-toggle { background: #f1f5f9; color: #475569; border: none; padding: 12px 20px; border-radius: 30px; cursor: pointer; }
-        .history-card { margin-top: 2rem; overflow-x: auto; padding-bottom: 10px; }
-        .history-grid { display: grid; gap: 4px; grid-template-columns: auto repeat(auto-fill, 12px); font-size: 10px; }
+       .history-card { 
+    margin-top: 2rem; 
+    overflow-x: auto; 
+    padding: 1rem;
+    background: white;
+    border-radius: 12px;
+}
+       .history-grid { 
+    display: grid; 
+    /* Column 1: Task name (100px), then 30 columns for dates (14px each) */
+    grid-template-columns: 120px repeat(30, 16px); 
+    gap: 4px; 
+    align-items: center;
+}
         .history-row { display: contents; }
-        .task-name-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px; padding-right: 8px; color: #64748b; }
-        .sq { width: 12px; height: 12px; border-radius: 2px; background: #e2e8f0; }
-        .sq.done { background: #10b981; } /* Green for checked */
+       .task-name-label { 
+    font-size: 11px; 
+    color: #64748b; 
+    white-space: nowrap; 
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+}
+        .date-header {
+    font-size: 9px;
+    color: #94a3b8;
+    text-align: center;
+    writing-mode: vertical-rl; /* Rotates the dates so they fit */
+    transform: rotate(180deg);
+    padding-bottom: 5px;
+}
+
+.sq { 
+    width: 14px; 
+    height: 14px; 
+    border-radius: 2px; 
+    background: #f1f5f9; 
+    border: 1px solid #e2e8f0;
+}
+
+.sq.done { 
+    background: #10b981; 
+    border-color: #059669; 
+}
         .history-header { display: contents; }
         .history-header div { transform: rotate(-90deg); height: 30px; margin-bottom: 5px; }
         #unsavedText { color: #ef4444; font-size: 0.8rem; font-weight: 600; visibility: hidden; }
@@ -86,33 +123,36 @@
         const response = await fetch('/api/history');
         const data = await response.json();
 
-        if (!data.tasks.length) {
-            grid.innerHTML = "No history found.";
+        if (!data.tasks || data.tasks.length === 0) {
+            grid.innerHTML = "<p style='grid-column: 1/-1; color: #94a3b8;'>No history yet.</p>";
             return;
         }
 
-        // 1. Create Headers (Dates)
-        let html = '<div class="task-name-label"></div>'; // Empty top-left corner
+        // Clear and set the number of columns based on how many dates we have
+        grid.innerHTML = '';
+        grid.style.gridTemplateColumns = `120px repeat(${data.dates.length}, 16px)`;
+
+        // 1. Add Header Row (Empty corner + Date labels)
+        grid.innerHTML += '<div></div>'; // Top left corner
         data.dates.forEach(d => {
-            const shortDate = d.split('-').slice(1).join('/'); // MM/DD
-            html += `<div style="font-size: 8px; color: #94a3b8;">${shortDate}</div>`;
+            const datePart = d.split('-').slice(1).join('/'); // MM/DD
+            grid.innerHTML += `<div class="date-header">${datePart}</div>`;
         });
 
-        // 2. Create Rows (Tasks)
+        // 2. Add Task Rows
         data.tasks.forEach(taskName => {
-            html += `<div class="history-row">`;
-            html += `<div class="task-name-label">${taskName}</div>`;
+            // Task Label
+            grid.innerHTML += `<div class="task-name-label" title="${taskName}">${taskName}</div>`;
             
+            // Squares for each date
             data.dates.forEach(date => {
                 const isDone = data.history[date] && data.history[date][taskName];
-                html += `<div class="sq ${isDone ? 'done' : ''}" title="${date}: ${taskName}"></div>`;
+                grid.innerHTML += `<div class="sq ${isDone ? 'done' : ''}" title="${date}: ${taskName}"></div>`;
             });
-            html += `</div>`;
         });
 
-        grid.innerHTML = html;
     } catch (err) {
-        grid.innerHTML = "Error loading history.";
+        grid.innerHTML = "<p style='grid-column: 1/-1; color: #ef4444;'>Failed to load history database.</p>";
     }
 }
 
@@ -244,5 +284,6 @@ async function init() {
 </body>
 
 </html>
+
 
 
